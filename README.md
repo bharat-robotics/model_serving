@@ -1,4 +1,6 @@
 # model_serving
+pull the image from docker
+docker pull hhowell/project3
 
 Export the model
 python mnist_saved_model.py models/mnist
