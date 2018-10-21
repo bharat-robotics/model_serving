@@ -40,6 +40,7 @@ from tensorflow_serving.apis import predict_pb2
 from tensorflow_serving.apis import prediction_service_pb2_grpc
 import mnist_input_data
 
+import time
 
 tf.app.flags.DEFINE_integer('concurrency', 1,
                             'maximum number of concurrent inference requests')
@@ -109,8 +110,10 @@ def _create_rpc_callback(label, result_counter):
       result_counter.inc_error()
       print(exception)
     else:
+      '''
       sys.stdout.write('.')
       sys.stdout.flush()
+      '''
       response = numpy.array(
           result_future.result().outputs['scores'].float_val)
       prediction = numpy.argmax(response)
@@ -140,7 +143,9 @@ def do_inference(hostport, work_dir, concurrency, num_tests):
   channel = grpc.insecure_channel(hostport)
   stub = prediction_service_pb2_grpc.PredictionServiceStub(channel)
   result_counter = _ResultCounter(num_tests, concurrency)
+  request_time = []
   for _ in range(num_tests):
+    start_time = time.time()
     request = predict_pb2.PredictRequest()
     request.model_spec.name = 'mnist'
     request.model_spec.signature_name = 'predict_images'
@@ -151,6 +156,13 @@ def do_inference(hostport, work_dir, concurrency, num_tests):
     result_future = stub.Predict.future(request, 5.0)  # 5 seconds
     result_future.add_done_callback(
         _create_rpc_callback(label[0], result_counter))
+    t_time = time.time() - start_time
+    request_time.append((num_tests, t_time))
+    #sys.stdout.write(' {}\n'.format(t_time))
+    #sys.stdout.flush()
+  request_time.pop(0)
+  avg_time = sum([y for x, y in request_time])/len(request_time)
+  print('\n{}'.format(avg_time))
   return result_counter.get_error_rate()
 
 
