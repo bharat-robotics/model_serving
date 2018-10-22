@@ -162,7 +162,7 @@ def do_inference(hostport, work_dir, concurrency, num_tests):
     #sys.stdout.flush()
   request_time.pop(0)
   avg_time = sum([y for x, y in request_time])/len(request_time)
-  print('\n{}'.format(avg_time))
+  print('\nAveraged Response Time: {}'.format(avg_time))
   return result_counter.get_error_rate()
 
 
