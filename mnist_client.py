@@ -40,6 +40,7 @@ from tensorflow_serving.apis import predict_pb2
 from tensorflow_serving.apis import prediction_service_pb2_grpc
 import mnist_input_data
 
+from matplotlib import pyplot as plt
 import time
 
 tf.app.flags.DEFINE_integer('concurrency', 1,
@@ -59,6 +60,8 @@ class _ResultCounter(object):
     self._error = 0
     self._done = 0
     self._active = 0
+    self._cnt_rt = 0
+    self._response_times=numpy.zeros(num_tests)
     self._condition = threading.Condition()
 
   def inc_error(self):
@@ -87,8 +90,24 @@ class _ResultCounter(object):
         self._condition.wait()
       self._active += 1
 
+  def inc_cnt_rt(self):
+      with self._condition:
+          self._cnt_rt +=1
+          self._condition.notify()
 
-def _create_rpc_callback(label, result_counter):
+  def set_response_time(self, test_idx, response_time):
+      with self._condition:
+          if test_idx > 0 and test_idx <= self._num_tests:
+              self._response_times[test_idx-1] = response_time
+
+
+  def get_response_times(self):
+      with self._condition:
+        while self._done != self._num_tests:
+          self._condition.wait()
+        return self._response_times
+
+def _create_rpc_callback(label, result_counter, test_idx, start_time):
   """Creates RPC callback function.
 
   Args:
@@ -114,11 +133,14 @@ def _create_rpc_callback(label, result_counter):
       sys.stdout.write('.')
       sys.stdout.flush()
       '''
+
       response = numpy.array(
           result_future.result().outputs['scores'].float_val)
       prediction = numpy.argmax(response)
       if label != prediction:
         result_counter.inc_error()
+
+    result_counter.set_response_time(test_idx, time.time()-start_time)
     result_counter.inc_done()
     result_counter.dec_active()
   return _callback
@@ -143,26 +165,35 @@ def do_inference(hostport, work_dir, concurrency, num_tests):
   channel = grpc.insecure_channel(hostport)
   stub = prediction_service_pb2_grpc.PredictionServiceStub(channel)
   result_counter = _ResultCounter(num_tests, concurrency)
-  request_time = []
-  for _ in range(num_tests):
+
+  for i in range(num_tests):
     start_time = time.time()
     request = predict_pb2.PredictRequest()
     request.model_spec.name = 'mnist'
     request.model_spec.signature_name = 'predict_images'
+
     image, label = test_data_set.next_batch(1)
     request.inputs['images'].CopyFrom(
         tf.contrib.util.make_tensor_proto(image[0], shape=[1, image[0].size]))
     result_counter.throttle()
     result_future = stub.Predict.future(request, 5.0)  # 5 seconds
     result_future.add_done_callback(
-        _create_rpc_callback(label[0], result_counter))
-    t_time = time.time() - start_time
-    request_time.append((num_tests, t_time))
-    #sys.stdout.write(' {}\n'.format(t_time))
-    #sys.stdout.flush()
-  request_time.pop(0)
-  avg_time = sum([y for x, y in request_time])/len(request_time)
-  print('\nAveraged Response Time: {}'.format(avg_time))
+        _create_rpc_callback(label[0], result_counter, i, start_time))
+  start=150
+  end=851
+  num_of_outliers_to_exclude=num_tests-(end-start-1)
+  response_times=(result_counter.get_response_times())[start:end]
+  ave_time = sum(response_times)/len(response_times)
+  print('\nAveraged Response Time: {}'.format(ave_time))
+  plt.plot(range(1, len(response_times)+1), response_times, 'bo')
+  plt.xlabel("Test Index", fontsize=24)
+  plt.ylabel("Response Time (s)",fontsize=24)
+  plt.title("Concurrency: "+str(concurrency), fontsize=24)
+  plt.tick_params(labelsize=20)
+  plt.tight_layout()
+  plt.savefig("./response-time-numoftests-"+str(num_tests)+"-numofoutliers-"+str(num_of_outliers_to_exclude)+"-concurrency-"+str(concurrency)+".png")
+  #plt.savefig("./response-time-numoftests-"+str(num_tests)+"-concurrency-"+str(concurrency)+".png")
+  plt.close()
   return result_counter.get_error_rate()
 
 
