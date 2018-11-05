@@ -1,0 +1,28 @@
+test docker is working
+$ sudo docker run hello-world
+don't forget to install the pip packages
+$ pip install tensorflow-serving-api
+clone repo with mnist_saved_model.py
+$ git clone https://github.com/tensorflow/serving.git
+$ cd serving
+$ rm -rf models/mnist
+build, train, and export model
+$ python tensorflow_serving/example/mnist_saved_model.py --training_iteration=100 --model_version=1 models/mnist
+load exported model with standard TensorFlow ModelServer
+$ docker run -p 8500:8500 \
+--mount type=bind,source=$(pwd)/models/mnist,target=/models/mnist \
+-e MODEL_NAME=mnist -t tensorflow/serving &
+or use
+$ docker run -p 8500:8500 \
+  --mount type=bind,source=$(pwd)/models/monitored,target=/models/mnist \
+  -t --entrypoint=tensorflow_model_server tensorflow/serving  --enable_batching \
+  --port=8500 --model_name=mnist --model_base_path=/models/mnist &
+test the server
+$ python tensorflow_serving/example/mnist_client.py --num_tests=1000 --server=127.0.0.1:8500	
+
+
+some docker commands 
+list containers running
+$ docker container ls
+stop a running container 
+docker container stop CONTAINER
