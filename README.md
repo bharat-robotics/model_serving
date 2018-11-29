@@ -1,9 +1,20 @@
 # model_serving
+Run the serving image as a daemon
+docker run -d --name serving_base tensorflow/serving
 
-Load model for serving
-docker run -p 8500:8500 \
---mount type=bind,source=$(pwd)/models/inception,target=/models/inception \
--e MODEL_NAME=inception -t tensorflow/serving &
+Copy RestNet model data to the container's model folder 
+docker cp /tmp/resnet serving_base:/models/resnet
 
-Run the client script. Provide the server and path to images
-python inception_client.py --server=127.0.0.1:8500 --image=./images
+Commit the container to serving the ResNet model:
+docker commit --change "ENV MODEL_NAME resnet" serving_base \
+  $USER/resnet_serving
+
+Stop the serving base container
+docker kill serving_base
+docker rm serving_base
+
+Start the container with the ResNet model exposing the gRPC port 8500
+docker run -p 8500:8500 -t $USER/resnet_serving &
+
+Query the server with resnet_client_grpc.py. The client downloads an image and sends it over gRPC for classification into ImageNet categories
+tools/run_in_docker.sh python tensorflow_serving/example/resnet_client_grpc.py

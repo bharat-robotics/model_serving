@@ -33,9 +33,7 @@ def get_urls(req):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--threads', type=int, default=1)
     parser.add_argument('--requests', type=int, default=10)
-    parser.add_argument('--interval', type=float, default=0, help='the number of milliseconds between requests')
     parser.add_argument('--file', type=str, default='none')
     
     args = parser.parse_args()
