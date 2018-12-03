@@ -32,7 +32,9 @@ total_mem_usage_percent=0.0
 lines = pro.stdout.readlines()
 cnt=0
 for line in lines:
+    line=line.decode('utf-8')
     line=line.strip()
+    #print("[line "+str(cnt)+"] "+line)
     if "CONTAINER" not in line:
         cnt+=1
         print(line)
