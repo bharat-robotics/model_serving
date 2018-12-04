@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 """Send JPEG image to tensorflow_model_server loaded with ResNet model.
-
 """
 
 from __future__ import print_function
@@ -25,7 +24,7 @@ import requests
 import tensorflow as tf
 
 from tensorflow_serving.apis import predict_pb2
-from tensorflow_serving.apis import prediction_service_pb2
+from tensorflow_serving.apis import prediction_service_pb2_grpc
 
 # The image URL is the location of the image we should send to the server
 IMAGE_URL = 'https://tensorflow.org/images/blogs/serving/cat.jpg'
@@ -47,7 +46,7 @@ def main(_):
     data = dl_request.content
 
   channel = grpc.insecure_channel(FLAGS.server)
-  stub = prediction_service_pb2.PredictionServiceStub(channel)
+  stub = prediction_service_pb2_grpc.PredictionServiceStub(channel)
   # Send request
   # See prediction_service.proto for gRPC request/response details.
   request = predict_pb2.PredictRequest()
@@ -55,8 +54,7 @@ def main(_):
   request.model_spec.signature_name = 'serving_default'
   request.inputs['image_bytes'].CopyFrom(
       tf.contrib.util.make_tensor_proto(data, shape=[1]))
-  print(request.inputs)
-  result = stub.Predict(request, 100.0)  # 10 secs timeout
+  result = stub.Predict(request, 10.0)  # 10 secs timeout
   print(result)
 
 

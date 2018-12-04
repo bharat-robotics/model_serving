@@ -26,3 +26,5 @@ list containers running
 $ docker container ls
 stop a running container 
 docker container stop CONTAINER
+
+docker swarm init --advertise-addr 2606:a000:1321:848b:a881:50c:472:f64
