@@ -28,6 +28,11 @@ from tensorflow_serving.apis import prediction_service_pb2
 import threading
 import time
 
+import ruamel.yaml as yaml
+import random
+
+import os
+
 lock = threading.Lock()
 
 # The image URL is the location of the image we should send to the server
@@ -71,12 +76,41 @@ def main(_):
     dl_request = requests.get(IMAGE_URL, stream=True)
     dl_request.raise_for_status()
     data = dl_request.content
-  
-  threads = []
-  for i in range(100):
-    t = threading.Thread(target = thread_request, args = (time.time(),data))
-    threads.append(t)
-    t.start()
+
+  replicas = [1,10,20,30,40,50,60,70,80,90,100] 
+
+  # Sample 20 random configurations
+  for i in range(5):
+
+    # Read in old docker-compose file
+    with open('docker-compose.yml') as yf:
+      list_doc = yaml.load(yf, Loader=yaml.RoundTripLoader)
+
+    # Randomize configuration values
+    list_doc['services']['web']['deploy']['replicas']=random.choice(replicas)
+    list_doc['services']['web']['deploy']['resources']['limits']['cpus'] = "{}".format(round(random.uniform(0.1,1),2))
+    list_doc['services']['web']['deploy']['resources']['limits']['memory'] = '{}M'.format(random.randint(100,1000))
+
+    print(yaml.dump(list_doc, Dumper=yaml.RoundTripDumper))
+
+    # Write new docker-compose file
+    with open('docker-compose.yml', 'w') as f:
+      yaml.dump(list_doc, f, Dumper=yaml.RoundTripDumper)
+
+    # Remove old configuration
+    os.system('docker stack rm rand')
+    os.system('docker stop $(docker ps -aq)')
+    os.system('docker rm $(docker ps -aq)')
+
+    # Start up new configuration
+    os.system('docker stack deploy -c docker-compose.yml rand')
+
+    # Perform 100 threaded request for the configuration
+    threads = []
+    for i in range(100):
+      t = threading.Thread(target = thread_request, args = (time.time(),data))
+      threads.append(t)
+      t.start()
 
 if __name__ == '__main__':
   tf.app.run()
