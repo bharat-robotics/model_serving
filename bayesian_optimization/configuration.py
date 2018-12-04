@@ -7,6 +7,7 @@ import utils
 import subprocess
 import random
 import re
+import time
 
 compose_params = recordtype('compose_params', 'replicas  max_cpu max_memory')
 batching_params = recordtype('batching_params', 'max_batch_size batch_timeout_micros')
@@ -24,10 +25,10 @@ class Configuration:
                                           255, 253, 251, 249, 247, 245, 243, 241, 239, 237, 235, 233, 231, 229, 226, 224, 222, 220, 218, 216, 214,
                                           212, 210, 208, 206, 204, 202, 200, 198, 196, 194, 192, 190, 188, 186,
                                           183, 181, 179, 177, 175, 173, 171, 169, 167, 165, 163, 161, 159, 157, 155, 153, 151, 149, 147, 145, 143, 140, 138, 136])
-        self.allowed_batch_size = np.array([4, 8, 16, 32, 64, 96, 128, 256, 512, 768, 1024])
+        self.allowed_batch_size = np.array([4, 8, 16, 32, 64, 96, 128])
         self.min_batch_timeout = 100
         self.max_batch_timeout = 100000
-        self.max_replicas = 25
+        self.max_replicas = 20
         self.compose_params = compose_params(None, None, None)
         self.batching_params = batching_params(None, None)
         self.load_compose_params()
@@ -89,13 +90,13 @@ class Configuration:
 
         if max_cpu < 0.2:
             max_cpu = 0.2
-        elif max_cpu > 0.85:
-            max_cpu = 0.85
+        elif max_cpu > 0.5:
+            max_cpu = 0.5
 
         if max_mem < 500:
             max_mem = 500
-        elif max_mem > 25000:
-            max_mem = 25000
+        elif max_mem > 10000:
+            max_mem = 10000
 
         self.compose_params.max_cpu = str(round(max_cpu, 2))
         self.compose_params.max_memory = str(int(max_mem/100)*100)
@@ -138,6 +139,7 @@ class Configuration:
             print("Error Killing Previous Service")
             return
 
+        time.sleep(30)
 
         #Opening New Docker Service
         process = subprocess.call(['docker', 'stack', 'deploy', '-c', self.compose_file, 'opennmtapp'])
@@ -156,12 +158,12 @@ class Configuration:
                          , self.compose_params.max_memory, self.gpu_freq])
 
     def create_random_config(self):
-        max_batch_size = random.randint(1, 2000)
+        max_batch_size = random.randint(1, 130)
         batch_timeout_micros = random.randint(100, 100000)
-        replicas = random.randint(1, 25)
+        replicas = random.randint(1, 20)
         max_cpu = random.random()
-        max_memory = random.randint(500, 25000)
-        gpu_freq = random.randint(100, 1500)
+        max_memory = random.randint(500, 10000)
+        gpu_freq = random.randint(100, 1400)
 
         # print(max_batch_size)
         return np.array([max_batch_size, batch_timeout_micros, replicas, max_cpu, max_memory, gpu_freq])
@@ -198,6 +200,15 @@ class SystemState:
         self.inference_time = inference_time
         self.concurrency = concurrency
 
+    def set_batch_size(self,batch_size):
+        self.batch_size = batch_size
+
+    def set_concurrency(self, con):
+        self.concurrency = con
+
+    def set_inference_time(self, time):
+        self.inference_time = time
+
     def set_configuration(self, max_batch_size, batch_timeout_micros, replicas, max_cpu, max_memory, gpu_freq):
         self.config.write_config(gpu_freq, max_batch_size, batch_timeout_micros, replicas, max_cpu, max_memory)
         self.config.reload()
@@ -213,6 +224,13 @@ class SystemState:
     def get_config_array(self):
         return self.config.get_config_as_array()
 
+    def get_system_array(self):
+        self.config.load_batching_params()
+        self.config.load_compose_params()
+        return np.array([self.config.batching_params.max_batch_size, self.config.batching_params.batch_timeout_micros, self.config.compose_params.replicas,
+                         self.config.compose_params.max_cpu, self.config.compose_params.max_memory, self.config.gpu_freq, self.batch_size, self.inference_time,
+                         self.concurrency])
+
 
 if __name__ == '__main__':
 
@@ -222,12 +240,12 @@ if __name__ == '__main__':
     # config.set_gpu_freq(1200)
     # config.print_configuration()
     # config.reload()max_batch_size, batch_timeout_micros, replicas, max_cpu, max_memory, gpu_freq
+    # Killing Previous App
 
     state = SystemState()
     state.set_random_config()
     print(state.get_config_array())
     # state.config.print_configuration()
-
 
 
 
