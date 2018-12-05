@@ -1,0 +1,18 @@
+version: "3"
+services:
+  web:
+    image: harrison/resnet_serving:latest
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 500M
+      restart_policy:
+        condition: on-failure
+    ports:
+            - "8500:8500"
+    networks:
+      - webnet
+networks:
+  webnet:
