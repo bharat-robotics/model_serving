@@ -43,9 +43,9 @@ tf.app.flags.DEFINE_string('server', 'localhost:8500',
 tf.app.flags.DEFINE_string('image', '', 'path to image in JPEG format')
 FLAGS = tf.app.flags.FLAGS
 
-f = open('temp.txt', 'w')
+#f = open('temp.txt', 'w')
 
-def thread_request(start,data):
+def thread_request(sample,data,sf):
   channel = grpc.insecure_channel(FLAGS.server)
   stub = prediction_service_pb2.PredictionServiceStub(channel)
   # Send request
@@ -55,16 +55,17 @@ def thread_request(start,data):
   request.model_spec.signature_name = 'serving_default'
   request.inputs['image_bytes'].CopyFrom(
       tf.contrib.util.make_tensor_proto(data, shape=[1]))
+  start = time.time()
   try:
     result = stub.Predict(request, 10.0)  # 10 secs timeout
     end = time.time()
     lock.acquire()
-    f.write('start: {}\n'.format(str(start))+'end: {}\ntotal time: {}\n'.format(str(end),str(end-start)))
+    sf.write('start: {}\n'.format(str(start))+'end: {}\ntotal time: {}\nSucess\n'.format(str(end),str(end-start)))
     lock.release()
   except:
     end = time.time()
     lock.acquire()
-    f.write('start: {}\n'.format(str(start))+'end: {}\ntotal time: {}\n'.format(str(end),str(end-start)))
+    sf.write('start: {}\n'.format(str(start))+'end: {}\ntotal time: {}\nFailure\n'.format(str(end),str(end-start)))
     lock.release()
 
 def main(_):
@@ -80,7 +81,7 @@ def main(_):
   replicas = [1,10,20,30,40,50,60,70,80,90,100] 
 
   # Sample 20 random configurations
-  for i in range(1):
+  for i in range(20):
 
     # Read in old docker-compose file
     with open('./docker/docker-compose-resnet.yml') as yf:
@@ -90,7 +91,9 @@ def main(_):
     list_doc['services']['web']['deploy']['replicas']=random.choice(replicas)
     list_doc['services']['web']['deploy']['resources']['limits']['cpus'] = "{}".format(round(random.uniform(0.1,1),2))
     list_doc['services']['web']['deploy']['resources']['limits']['memory'] = '{}M'.format(random.randint(100,1000))
-
+    
+    sf = open('./resnet_samples/sample{}'.format(i), 'w')
+    yaml.dump(list_doc, sf, Dumper=yaml.RoundTripDumper)
     print(yaml.dump(list_doc, Dumper=yaml.RoundTripDumper))
 
     # Write new docker-compose file
@@ -99,24 +102,34 @@ def main(_):
 
     # Remove old configuration
     os.system('docker stack rm rand')
+    # This is because of an issue with docker return before the stack is removed
+    os.system('sleep 10')
     os.system('docker stop $(docker ps -aq)')
+    os.system('sleep 10')
     os.system('docker rm $(docker ps -aq)')
-
+    os.system('sleep 10')
+    
     # Start up new configuration
     os.system('docker stack deploy -c ./docker/docker-compose-resnet.yml rand')
 
     # Perform 100 threaded request for the configuration
     threads = []
-    for i in range(100):
-      t = threading.Thread(target = thread_request, args = (time.time(),data))
+    for j in range(100):
+      t = threading.Thread(target = thread_request, args = (i,data,sf))
       threads.append(t)
       t.start()
+
+    for t in threads:
+      t.join()
+    
+    sf.close()
 
 if __name__ == '__main__':
   tf.app.run()
 
+'''
 while threading.activeCount() > 1:
   pass
 else:
   f.close()  
-
+'''
